@@ -1,12 +1,13 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Secure REST API for the Connectly messaging application",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "create-admin": "node src/scripts/createAdmin.js",
+    "check": "node src/scripts/checkSyntax.js"
   },
   "keywords": [],
   "author": "",
