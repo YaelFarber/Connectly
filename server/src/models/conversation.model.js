@@ -1,7 +1,7 @@
 const { pool, withTransaction } = require("../config/db");
 
 async function listForUser(userId, { limit, offset }) {
-  const [rows] = await pool.execute(
+  const [rows] = await pool.query(
     `SELECT c.id, c.type,
             CASE
               WHEN c.type = 'group' THEN c.name
@@ -30,11 +30,13 @@ async function listForUser(userId, { limit, offset }) {
        ORDER BY m2.created_at DESC, m2.id DESC
        LIMIT 1
      )
-     WHERE mine.user_id = ? AND mine.left_at IS NULL
+     WHERE mine.user_id = ?
+       AND mine.left_at IS NULL
      ORDER BY COALESCE(lm.created_at, c.created_at) DESC
      LIMIT ? OFFSET ?`,
     [userId, userId, limit, offset]
   );
+
   return rows;
 }
 
@@ -43,11 +45,15 @@ async function getForUser(conversationId, userId) {
     `SELECT c.id, c.type, c.name, c.created_by AS createdBy,
             cp.participant_role AS currentUserRole
      FROM conversations c
-     JOIN conversation_participants cp ON cp.conversation_id = c.id
-     WHERE c.id = ? AND cp.user_id = ? AND cp.left_at IS NULL
+     JOIN conversation_participants cp
+       ON cp.conversation_id = c.id
+     WHERE c.id = ?
+       AND cp.user_id = ?
+       AND cp.left_at IS NULL
      LIMIT 1`,
     [conversationId, userId]
   );
+
   return rows[0] || null;
 }
 
@@ -57,10 +63,14 @@ async function getParticipants(conversationId) {
             cp.participant_role AS participantRole
      FROM conversation_participants cp
      JOIN users u ON u.id = cp.user_id
-     WHERE cp.conversation_id = ? AND cp.left_at IS NULL
-     ORDER BY cp.participant_role = 'admin' DESC, u.display_name, u.username`,
+     WHERE cp.conversation_id = ?
+       AND cp.left_at IS NULL
+     ORDER BY cp.participant_role = 'admin' DESC,
+              u.display_name,
+              u.username`,
     [conversationId]
   );
+
   return rows;
 }
 
@@ -68,34 +78,52 @@ async function findPrivateByPairKey(pairKey) {
   const [rows] = await pool.execute(
     `SELECT id
      FROM conversations
-     WHERE type = 'private' AND private_pair_key = ?
+     WHERE type = 'private'
+       AND private_pair_key = ?
      LIMIT 1`,
     [pairKey]
   );
+
   return rows[0] || null;
 }
 
-async function createPrivate({ id, pairKey, firstUserId, secondUserId }) {
+async function createPrivate({
+  id,
+  pairKey,
+  firstUserId,
+  secondUserId,
+}) {
   return withTransaction(async (connection) => {
     await connection.execute(
-      `INSERT INTO conversations (id, type, private_pair_key, created_by)
+      `INSERT INTO conversations
+         (id, type, private_pair_key, created_by)
        VALUES (?, 'private', ?, ?)`,
       [id, pairKey, firstUserId]
     );
+
     await connection.execute(
       `INSERT INTO conversation_participants
          (conversation_id, user_id, participant_role)
-       VALUES (?, ?, 'member'), (?, ?, 'member')`,
+       VALUES
+         (?, ?, 'member'),
+         (?, ?, 'member')`,
       [id, firstUserId, id, secondUserId]
     );
+
     return id;
   });
 }
 
-async function createGroup({ id, name, creatorId, participantIds }) {
+async function createGroup({
+  id,
+  name,
+  creatorId,
+  participantIds,
+}) {
   return withTransaction(async (connection) => {
     await connection.execute(
-      `INSERT INTO conversations (id, type, name, created_by)
+      `INSERT INTO conversations
+         (id, type, name, created_by)
        VALUES (?, 'group', ?, ?)`,
       [id, name, creatorId]
     );
@@ -115,6 +143,7 @@ async function createGroup({ id, name, creatorId, participantIds }) {
         [id, participantId]
       );
     }
+
     return id;
   });
 }
@@ -122,8 +151,10 @@ async function createGroup({ id, name, creatorId, participantIds }) {
 async function updateGroup(conversationId, name) {
   await pool.execute(
     `UPDATE conversations
-     SET name = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ? AND type = 'group'`,
+     SET name = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND type = 'group'`,
     [name, conversationId]
   );
 }
@@ -134,7 +165,9 @@ async function addParticipant(conversationId, userId) {
        (conversation_id, user_id, participant_role, joined_at, left_at)
      VALUES (?, ?, 'member', CURRENT_TIMESTAMP, NULL)
      ON DUPLICATE KEY UPDATE
-       participant_role = 'member', joined_at = CURRENT_TIMESTAMP, left_at = NULL`,
+       participant_role = 'member',
+       joined_at = CURRENT_TIMESTAMP,
+       left_at = NULL`,
     [conversationId, userId]
   );
 }
@@ -143,7 +176,9 @@ async function removeParticipant(conversationId, userId) {
   await pool.execute(
     `UPDATE conversation_participants
      SET left_at = CURRENT_TIMESTAMP
-     WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
+     WHERE conversation_id = ?
+       AND user_id = ?
+       AND left_at IS NULL`,
     [conversationId, userId]
   );
 }
@@ -151,19 +186,26 @@ async function removeParticipant(conversationId, userId) {
 async function deleteGroup(conversationId) {
   await pool.execute(
     `DELETE FROM conversations
-     WHERE id = ? AND type = 'group'`,
+     WHERE id = ?
+       AND type = 'group'`,
     [conversationId]
   );
 }
 
-async function getOtherPrivateParticipant(conversationId, userId) {
+async function getOtherPrivateParticipant(
+  conversationId,
+  userId
+) {
   const [rows] = await pool.execute(
     `SELECT user_id AS userId
      FROM conversation_participants
-     WHERE conversation_id = ? AND user_id <> ? AND left_at IS NULL
+     WHERE conversation_id = ?
+       AND user_id <> ?
+       AND left_at IS NULL
      LIMIT 1`,
     [conversationId, userId]
   );
+
   return rows[0]?.userId || null;
 }
 
