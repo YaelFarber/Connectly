@@ -6,9 +6,10 @@ const { authenticate } = require("../middleware/auth.middleware");
 const router = express.Router();
 router.use(authenticate);
 
-router.get("/", asyncHandler(UserController.search));
+router.get("/me", asyncHandler(UserController.getMe));
 router.patch("/me", asyncHandler(UserController.updateMe));
 router.patch("/me/password", asyncHandler(UserController.changePassword));
+router.get("/", asyncHandler(UserController.search));
 router.post("/:userId/block", asyncHandler(UserController.block));
 router.delete("/:userId/block", asyncHandler(UserController.unblock));
 

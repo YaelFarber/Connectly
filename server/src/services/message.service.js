@@ -23,7 +23,9 @@ async function ensurePrivateMessagingAllowed(userId, conversation) {
 
 async function list(userId, conversationId, query) {
   validation.uuid(conversationId, "conversation id");
-  await requireParticipant(userId, conversationId);
+
+  const conversation = await ConversationModel.getChatSummaryForUser(conversationId, userId);
+  if (!conversation) throw new HttpError(404, "Conversation not found", "NOT_FOUND");
 
   const limit = Math.min(50, Math.max(1, Number.parseInt(query.limit, 10) || 30));
   let before = null;
@@ -35,31 +37,34 @@ async function list(userId, conversationId, query) {
     before = date.toISOString().slice(0, 19).replace("T", " ");
   }
 
-  const rows = await MessageModel.list(conversationId, { limit: limit + 1, before });
-  const hasMore = rows.length > limit;
-  const selected = rows.slice(0, limit).reverse();
-  const nextBefore = hasMore && selected.length ? selected[0].createdAt : null;
+  const rows = await MessageModel.list(conversationId, { limit, before });
+  const items = rows.reverse().map((message) => {
+    const mine = message.senderId === userId;
+    return {
+      id: message.id,
+      mine,
+      ...(mine ? {} : { senderName: message.senderName }),
+      content: message.content,
+      isEdited: Boolean(message.isEdited),
+      isDeleted: Boolean(message.deletedAt),
+      createdAt: message.createdAt,
+      attachment: message.attachmentId
+        ? {
+            id: message.attachmentId,
+            name: message.attachmentName,
+            mimeType: message.attachmentMimeType,
+          }
+        : null,
+    };
+  });
 
-  const items = selected.map((message) => ({
-    id: message.id,
-    senderId: message.senderId,
-    senderName: message.senderName,
-    content: message.content,
-    messageType: message.messageType,
-    isEdited: Boolean(message.isEdited),
-    isDeleted: Boolean(message.deletedAt),
-    createdAt: message.createdAt,
-    attachment: message.attachmentId
-      ? {
-          id: message.attachmentId,
-          name: message.attachmentName,
-          mimeType: message.attachmentMimeType,
-          size: message.attachmentSize,
-        }
-      : null,
-  }));
-
-  return { items, hasMore, nextBefore };
+  return {
+    conversation: {
+      name: conversation.name,
+      participantCount: Number(conversation.participantCount),
+    },
+    items,
+  };
 }
 
 async function create(userId, conversationId, input, file) {
@@ -101,7 +106,6 @@ async function create(userId, conversationId, input, file) {
 
     return {
       id,
-      createdAt: createdAt.toISOString(),
       attachmentId: attachment?.id || null,
     };
   } catch (error) {

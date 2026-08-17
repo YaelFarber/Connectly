@@ -4,21 +4,17 @@ async function list(req, res) {
   res.status(200).json(await ConversationService.list(req.user.id, req.query));
 }
 
-async function get(req, res) {
-  res.status(200).json(await ConversationService.getDetails(req.user.id, req.params.conversationId));
-}
-
 async function createPrivate(req, res) {
   const result = await ConversationService.createPrivate(req.user.id, req.body);
   res
     .status(result.created ? 201 : 200)
     .set("Location", `/api/conversations/${result.id}`)
-    .json({ id: result.id });
+    .end();
 }
 
 async function createGroup(req, res) {
   const result = await ConversationService.createGroup(req.user.id, req.body);
-  res.status(201).set("Location", `/api/conversations/${result.id}`).json({ id: result.id });
+  res.status(201).set("Location", `/api/conversations/${result.id}`).end();
 }
 
 async function updateGroup(req, res) {
@@ -52,7 +48,6 @@ async function removeGroup(req, res) {
 
 module.exports = {
   list,
-  get,
   createPrivate,
   createGroup,
   updateGroup,

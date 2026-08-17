@@ -3,25 +3,34 @@ const UserModel = require("../models/user.model");
 const HttpError = require("../utils/httpError");
 const validation = require("../utils/validation");
 
-async function getMe(userId) {
-  const user = await UserModel.findPublicById(userId);
+function getSessionView(authUser) {
+  return {
+    id: authUser.id,
+    displayName: authUser.displayName,
+    role: authUser.role,
+  };
+}
+
+async function getOwnProfile(userId) {
+  const user = await UserModel.findOwnProfileById(userId);
   if (!user) throw new HttpError(404, "User not found", "NOT_FOUND");
   return user;
 }
 
 async function searchUsers(userId, query) {
-  const { page, limit, offset } = validation.pagination(query, {
+  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
+  if (search.length < 2) return { items: [] };
+
+  const { limit, offset } = validation.pagination(query, {
     defaultLimit: 20,
     maxLimit: 30,
   });
-  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
-  const rows = await UserModel.search({ currentUserId: userId, search, limit: limit + 1, offset });
-  const hasMore = rows.length > limit;
-  return { items: rows.slice(0, limit), page, hasMore };
+  const rows = await UserModel.search({ currentUserId: userId, search, limit, offset });
+  return { items: rows };
 }
 
 async function updateProfile(userId, input) {
-  const current = await getMe(userId);
+  const current = await getOwnProfile(userId);
   const email = input.email === undefined ? current.email : validation.email(input.email);
   const displayName =
     input.displayName === undefined
@@ -70,14 +79,15 @@ async function unblockUser(userId, targetId) {
 }
 
 async function listForAdmin(query) {
-  const { page, limit, offset } = validation.pagination(query, {
+  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
+  if (search.length < 2) return { items: [] };
+
+  const { limit, offset } = validation.pagination(query, {
     defaultLimit: 25,
     maxLimit: 50,
   });
-  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
-  const rows = await UserModel.adminList({ search, limit: limit + 1, offset });
-  const hasMore = rows.length > limit;
-  return { items: rows.slice(0, limit), page, hasMore };
+  const rows = await UserModel.adminList({ search, limit, offset });
+  return { items: rows };
 }
 
 async function setBlockedByAdmin(adminId, targetId, blocked) {
@@ -97,7 +107,8 @@ async function setBlockedByAdmin(adminId, targetId, blocked) {
 }
 
 module.exports = {
-  getMe,
+  getSessionView,
+  getOwnProfile,
   searchUsers,
   updateProfile,
   changePassword,

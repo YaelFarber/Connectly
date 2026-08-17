@@ -5,7 +5,7 @@ async function listForUser(userId, { limit, offset }) {
     `SELECT c.id, c.type,
             CASE
               WHEN c.type = 'group' THEN c.name
-              ELSE COALESCE(other_user.display_name, other_user.username)
+              ELSE COALESCE(other_user.display_name, 'Private conversation')
             END AS name,
             lm.id AS lastMessageId,
             CASE
@@ -42,7 +42,7 @@ async function listForUser(userId, { limit, offset }) {
 
 async function getForUser(conversationId, userId) {
   const [rows] = await pool.execute(
-    `SELECT c.id, c.type, c.name, c.created_by AS createdBy,
+    `SELECT c.id, c.type,
             cp.participant_role AS currentUserRole
      FROM conversations c
      JOIN conversation_participants cp
@@ -57,21 +57,35 @@ async function getForUser(conversationId, userId) {
   return rows[0] || null;
 }
 
-async function getParticipants(conversationId) {
+async function getChatSummaryForUser(conversationId, userId) {
   const [rows] = await pool.execute(
-    `SELECT u.id, u.username, u.display_name AS displayName,
-            cp.participant_role AS participantRole
-     FROM conversation_participants cp
-     JOIN users u ON u.id = cp.user_id
-     WHERE cp.conversation_id = ?
-       AND cp.left_at IS NULL
-     ORDER BY cp.participant_role = 'admin' DESC,
-              u.display_name,
-              u.username`,
-    [conversationId]
+    `SELECT c.type,
+            CASE
+              WHEN c.type = 'group' THEN c.name
+              ELSE COALESCE(other_user.display_name, 'Private conversation')
+            END AS name,
+            (
+              SELECT COUNT(*)
+              FROM conversation_participants active_participant
+              WHERE active_participant.conversation_id = c.id
+                AND active_participant.left_at IS NULL
+            ) AS participantCount
+     FROM conversation_participants mine
+     JOIN conversations c ON c.id = mine.conversation_id
+     LEFT JOIN conversation_participants other_participant
+       ON c.type = 'private'
+      AND other_participant.conversation_id = c.id
+      AND other_participant.user_id <> ?
+      AND other_participant.left_at IS NULL
+     LEFT JOIN users other_user ON other_user.id = other_participant.user_id
+     WHERE mine.conversation_id = ?
+       AND mine.user_id = ?
+       AND mine.left_at IS NULL
+     LIMIT 1`,
+    [userId, conversationId, userId]
   );
 
-  return rows;
+  return rows[0] || null;
 }
 
 async function findPrivateByPairKey(pairKey) {
@@ -87,12 +101,7 @@ async function findPrivateByPairKey(pairKey) {
   return rows[0] || null;
 }
 
-async function createPrivate({
-  id,
-  pairKey,
-  firstUserId,
-  secondUserId,
-}) {
+async function createPrivate({ id, pairKey, firstUserId, secondUserId }) {
   return withTransaction(async (connection) => {
     await connection.execute(
       `INSERT INTO conversations
@@ -114,12 +123,7 @@ async function createPrivate({
   });
 }
 
-async function createGroup({
-  id,
-  name,
-  creatorId,
-  participantIds,
-}) {
+async function createGroup({ id, name, creatorId, participantIds }) {
   return withTransaction(async (connection) => {
     await connection.execute(
       `INSERT INTO conversations
@@ -192,10 +196,7 @@ async function deleteGroup(conversationId) {
   );
 }
 
-async function getOtherPrivateParticipant(
-  conversationId,
-  userId
-) {
+async function getOtherPrivateParticipant(conversationId, userId) {
   const [rows] = await pool.execute(
     `SELECT user_id AS userId
      FROM conversation_participants
@@ -212,7 +213,7 @@ async function getOtherPrivateParticipant(
 module.exports = {
   listForUser,
   getForUser,
-  getParticipants,
+  getChatSummaryForUser,
   findPrivateByPairKey,
   createPrivate,
   createGroup,

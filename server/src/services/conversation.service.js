@@ -12,29 +12,14 @@ function privatePairKey(firstId, secondId) {
 }
 
 async function list(userId, query) {
-  const { page, limit, offset } = validation.pagination(query, {
+  const { limit, offset } = validation.pagination(query, {
     defaultLimit: 30,
     maxLimit: 50,
   });
-  const rows = await ConversationModel.listForUser(userId, { limit: limit + 1, offset });
-  const hasMore = rows.length > limit;
-  return { items: rows.slice(0, limit), page, hasMore };
+  const rows = await ConversationModel.listForUser(userId, { limit, offset });
+  return { items: rows };
 }
 
-async function getDetails(userId, conversationId) {
-  validation.uuid(conversationId, "conversation id");
-  const conversation = await ConversationModel.getForUser(conversationId, userId);
-  if (!conversation) throw new HttpError(404, "Conversation not found", "NOT_FOUND");
-
-  const participants = await ConversationModel.getParticipants(conversationId);
-  let name = conversation.name;
-  if (conversation.type === "private") {
-    const other = participants.find((participant) => participant.id !== userId);
-    name = other?.displayName || other?.username || "Private conversation";
-  }
-
-  return { ...conversation, name, participants };
-}
 
 async function createPrivate(userId, input) {
   const targetId = validation.uuid(input.userId, "user id");
@@ -162,7 +147,6 @@ async function deleteGroup(userId, conversationId) {
 
 module.exports = {
   list,
-  getDetails,
   createPrivate,
   createGroup,
   updateGroup,

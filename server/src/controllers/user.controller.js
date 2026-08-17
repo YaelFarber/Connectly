@@ -1,5 +1,9 @@
 const UserService = require("../services/user.service");
 
+async function getMe(req, res) {
+  res.status(200).json(await UserService.getOwnProfile(req.user.id));
+}
+
 async function search(req, res) {
   res.status(200).json(await UserService.searchUsers(req.user.id, req.query));
 }
@@ -24,4 +28,4 @@ async function unblock(req, res) {
   res.status(204).end();
 }
 
-module.exports = { search, updateMe, changePassword, block, unblock };
+module.exports = { getMe, search, updateMe, changePassword, block, unblock };

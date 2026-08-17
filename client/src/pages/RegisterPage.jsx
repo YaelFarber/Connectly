@@ -23,8 +23,10 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       await register(form);
+      setForm({ username: "", email: "", displayName: "", password: "" });
       navigate("/chats", { replace: true });
     } catch (requestError) {
+      setForm((current) => ({ ...current, password: "" }));
       setError(requestError.message);
     } finally {
       setSubmitting(false);
@@ -41,7 +43,20 @@ export default function RegisterPage() {
         <h1>Create an account</h1>
         <ErrorMessage message={error} />
         <label>Display name<input value={form.displayName} onChange={(e) => update("displayName", e.target.value)} required /></label>
-        <label>Username<input value={form.username} onChange={(e) => update("username", e.target.value)} autoComplete="username" required /></label>
+        <label>
+          Username
+          <input
+            value={form.username}
+            onChange={(e) => update("username", e.target.value)}
+            autoComplete="username"
+            minLength={3}
+            maxLength={30}
+            pattern="[A-Za-z0-9._-]+"
+            title="Use only English letters, numbers, dots, underscores, and hyphens"
+            required
+          />
+          <small>3–30 characters. English letters, numbers, dots, underscores, and hyphens only.</small>
+        </label>
         <label>Email<input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} autoComplete="email" required /></label>
         <label>
           Password

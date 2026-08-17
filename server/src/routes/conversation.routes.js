@@ -11,7 +11,6 @@ router.use(authenticate);
 router.get("/", asyncHandler(ConversationController.list));
 router.post("/private", asyncHandler(ConversationController.createPrivate));
 router.post("/groups", asyncHandler(ConversationController.createGroup));
-router.get("/:conversationId", asyncHandler(ConversationController.get));
 router.patch("/:conversationId", asyncHandler(ConversationController.updateGroup));
 router.delete("/:conversationId", asyncHandler(ConversationController.removeGroup));
 

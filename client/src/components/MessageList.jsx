@@ -3,7 +3,6 @@ import { attachmentUrl } from "../services/api";
 
 export default function MessageList({
   messages,
-  currentUserId,
   onEdit,
   onDelete,
 }) {
@@ -70,8 +69,7 @@ export default function MessageList({
   return (
     <div className="message-list">
       {messages.map((message) => {
-        const mine =
-          message.senderId === currentUserId;
+        const mine = message.mine;
         const editing =
           editingMessageId === message.id;
         const saving =

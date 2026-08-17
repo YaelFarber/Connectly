@@ -14,7 +14,12 @@ async function create(req, res) {
     req.body,
     req.file
   );
-  res.status(201).json(result);
+
+  res.set("Location", `/api/messages/${result.id}`);
+  if (result.attachmentId) {
+    res.set("X-Attachment-Id", result.attachmentId);
+  }
+  res.status(201).end();
 }
 
 async function update(req, res) {

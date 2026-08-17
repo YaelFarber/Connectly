@@ -1,12 +1,6 @@
-const {
-  pool,
-  withTransaction,
-} = require("../config/db");
+const { pool, withTransaction } = require("../config/db");
 
-async function list(
-  conversationId,
-  { limit, before }
-) {
+async function list(conversationId, { limit, before }) {
   const params = [conversationId];
   let cursorClause = "";
 
@@ -22,43 +16,30 @@ async function list(
             m.sender_id AS senderId,
             u.display_name AS senderName,
             CASE
-              WHEN m.deleted_at IS NULL
-              THEN m.content
+              WHEN m.deleted_at IS NULL THEN m.content
               ELSE NULL
             END AS content,
-            m.message_type AS messageType,
             m.is_edited AS isEdited,
             m.deleted_at AS deletedAt,
             m.created_at AS createdAt,
             CASE
-              WHEN m.deleted_at IS NULL
-              THEN a.id
+              WHEN m.deleted_at IS NULL THEN a.id
               ELSE NULL
             END AS attachmentId,
             CASE
-              WHEN m.deleted_at IS NULL
-              THEN a.original_name
+              WHEN m.deleted_at IS NULL THEN a.original_name
               ELSE NULL
             END AS attachmentName,
             CASE
-              WHEN m.deleted_at IS NULL
-              THEN a.mime_type
+              WHEN m.deleted_at IS NULL THEN a.mime_type
               ELSE NULL
-            END AS attachmentMimeType,
-            CASE
-              WHEN m.deleted_at IS NULL
-              THEN a.file_size
-              ELSE NULL
-            END AS attachmentSize
+            END AS attachmentMimeType
      FROM messages m
-     JOIN users u
-       ON u.id = m.sender_id
-     LEFT JOIN message_attachments a
-       ON a.message_id = m.id
+     JOIN users u ON u.id = m.sender_id
+     LEFT JOIN message_attachments a ON a.message_id = m.id
      WHERE m.conversation_id = ?
        ${cursorClause}
-     ORDER BY m.created_at DESC,
-              m.id DESC
+     ORDER BY m.created_at DESC, m.id DESC
      LIMIT ?`,
     params
   );
@@ -78,39 +59,15 @@ async function create({
   return withTransaction(async (connection) => {
     await connection.execute(
       `INSERT INTO messages
-         (
-           id,
-           conversation_id,
-           sender_id,
-           content,
-           message_type,
-           created_at,
-           updated_at
-         )
+         (id, conversation_id, sender_id, content, message_type, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        conversationId,
-        senderId,
-        content,
-        messageType,
-        createdAt,
-        createdAt,
-      ]
+      [id, conversationId, senderId, content, messageType, createdAt, createdAt]
     );
 
     if (attachment) {
       await connection.execute(
         `INSERT INTO message_attachments
-           (
-             id,
-             message_id,
-             original_name,
-             stored_name,
-             file_path,
-             mime_type,
-             file_size
-           )
+           (id, message_id, original_name, stored_name, file_path, mime_type, file_size)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           attachment.id,
@@ -174,20 +131,15 @@ async function softDelete(messageId) {
   );
 }
 
-async function getAttachmentForUser(
-  attachmentId,
-  userId
-) {
+async function getAttachmentForUser(attachmentId, userId) {
   const [rows] = await pool.execute(
-    `SELECT a.id,
-            a.original_name AS originalName,
+    `SELECT a.original_name AS originalName,
             a.file_path AS filePath,
             a.mime_type AS mimeType,
             a.file_size AS fileSize,
             m.deleted_at AS messageDeletedAt
      FROM message_attachments a
-     JOIN messages m
-       ON m.id = a.message_id
+     JOIN messages m ON m.id = a.message_id
      JOIN conversation_participants cp
        ON cp.conversation_id = m.conversation_id
      WHERE a.id = ?
@@ -200,14 +152,11 @@ async function getAttachmentForUser(
   return rows[0] || null;
 }
 
-async function listAttachmentPathsByConversation(
-  conversationId
-) {
+async function listAttachmentPathsByConversation(conversationId) {
   const [rows] = await pool.execute(
     `SELECT a.file_path AS filePath
      FROM message_attachments a
-     JOIN messages m
-       ON m.id = a.message_id
+     JOIN messages m ON m.id = a.message_id
      WHERE m.conversation_id = ?`,
     [conversationId]
   );

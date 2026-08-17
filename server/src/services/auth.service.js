@@ -57,7 +57,7 @@ async function login(input) {
     throw new HttpError(403, "This account is blocked", "ACCOUNT_BLOCKED");
   }
 
-  return { id: user.id, token: createToken(user.id) };
+  return { token: createToken(user.id) };
 }
 
 module.exports = { register, login };

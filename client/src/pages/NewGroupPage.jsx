@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ErrorMessage from "../components/ErrorMessage";
-import { apiRequest } from "../services/api";
+import { apiCreatedResource, apiRequest } from "../services/api";
 
 export default function NewGroupPage() {
   const [name, setName] = useState("");
@@ -13,14 +13,21 @@ export default function NewGroupPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const term = search.trim();
+    if (term.length < 2) {
+      setUsers([]);
+      return undefined;
+    }
+
     const timer = window.setTimeout(async () => {
       try {
-        const result = await apiRequest(`/users?limit=30&search=${encodeURIComponent(search)}`);
+        const result = await apiRequest(`/users?limit=20&search=${encodeURIComponent(term)}`);
         setUsers(result.items);
       } catch (requestError) {
         setError(requestError.message);
       }
-    }, 250);
+    }, 350);
+
     return () => window.clearTimeout(timer);
   }, [search]);
 
@@ -38,11 +45,11 @@ export default function NewGroupPage() {
     setSubmitting(true);
     setError("");
     try {
-      const result = await apiRequest("/conversations/groups", {
+      const created = await apiCreatedResource("/conversations/groups", {
         method: "POST",
         body: { name, participantIds: [...selected] },
       });
-      navigate(`/chats/${result.id}`);
+      navigate(`/chats/${created.id}`);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -56,12 +63,12 @@ export default function NewGroupPage() {
       <ErrorMessage message={error} />
       <form onSubmit={createGroup} className="stack-form">
         <label>Group name<input value={name} onChange={(e) => setName(e.target.value)} minLength={2} maxLength={80} required /></label>
-        <label>Find members<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users" /></label>
+        <label>Find members<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Type at least 2 characters" /></label>
         <div className="selection-list">
           {users.map((person) => (
             <label key={person.id} className="selection-row">
               <input type="checkbox" checked={selected.has(person.id)} onChange={() => toggle(person.id)} />
-              <span><strong>{person.displayName}</strong><small>@{person.username}</small></span>
+              <span><strong>{person.displayName}</strong></span>
             </label>
           ))}
         </div>

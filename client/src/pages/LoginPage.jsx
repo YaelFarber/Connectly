@@ -19,8 +19,10 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(form);
+      setForm({ identifier: "", password: "" });
       navigate(location.state?.from || "/chats", { replace: true });
     } catch (requestError) {
+      setForm((current) => ({ ...current, password: "" }));
       setError(requestError.message);
     } finally {
       setSubmitting(false);

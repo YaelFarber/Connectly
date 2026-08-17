@@ -4,7 +4,14 @@ function securityHeaders(req, res, next) {
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   res.setHeader("Cross-Origin-Resource-Policy", "same-site");
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
   next();
 }
 
@@ -13,7 +20,7 @@ function verifyRequestOrigin(req, res, next) {
   const origin = req.get("origin");
   const allowedOrigin = process.env.CLIENT_URL || "http://localhost:5173";
   if (origin && origin !== allowedOrigin) {
-    return res.status(403).json({ code: "INVALID_ORIGIN", message: "Request origin is not allowed" });
+    return res.status(403).type("text/plain").send("Request origin is not allowed");
   }
   next();
 }
@@ -40,7 +47,7 @@ function createRateLimiter({ windowMs, max, message }) {
     if (current.count > max) {
       const retryAfter = Math.ceil((current.resetAt - now) / 1000);
       res.setHeader("Retry-After", String(retryAfter));
-      return res.status(429).json({ code: "RATE_LIMITED", message });
+      return res.status(429).type("text/plain").send(message);
     }
 
     next();

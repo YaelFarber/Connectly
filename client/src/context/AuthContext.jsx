@@ -42,7 +42,19 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = { user, loading, login, register, logout, refresh };
+  function updateSessionUser(changes) {
+    setUser((current) => (current ? { ...current, ...changes } : current));
+  }
+
+  const value = {
+    user,
+    loading,
+    login,
+    register,
+    logout,
+    refresh,
+    updateSessionUser,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

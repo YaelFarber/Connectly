@@ -2,15 +2,14 @@ export const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || "http://localhost:3
 const API_BASE = `${API_ORIGIN}/api`;
 
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, message) {
     super(message);
     this.name = "ApiError";
     this.status = status;
-    this.code = code;
   }
 }
 
-export async function apiRequest(path, options = {}) {
+async function performRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const hasBody = options.body !== undefined && options.body !== null;
   const isFormData = options.body instanceof FormData;
@@ -23,24 +22,34 @@ export async function apiRequest(path, options = {}) {
     ...options,
     headers,
     credentials: "include",
-    body: hasBody && !isFormData && typeof options.body !== "string"
-      ? JSON.stringify(options.body)
-      : options.body,
+    body:
+      hasBody && !isFormData && typeof options.body !== "string"
+        ? JSON.stringify(options.body)
+        : options.body,
   });
 
   if (!response.ok) {
-    let payload;
+    let message = "The request failed";
     try {
-      payload = await response.json();
+      const text = await response.text();
+      if (text) message = text;
     } catch {
-      payload = undefined;
+      message = "The request failed";
     }
-    throw new ApiError(
-      response.status,
-      payload?.code || "REQUEST_FAILED",
-      payload?.message || "The request failed"
-    );
+    throw new ApiError(response.status, message);
   }
+
+  return response;
+}
+
+function resourceIdFromLocation(location) {
+  if (!location) throw new Error("The server did not return a resource location");
+  const parts = location.split("/").filter(Boolean);
+  return decodeURIComponent(parts[parts.length - 1]);
+}
+
+export async function apiRequest(path, options = {}) {
+  const response = await performRequest(path, options);
 
   if (response.status === 204 || response.headers.get("content-length") === "0") {
     return null;
@@ -51,6 +60,14 @@ export async function apiRequest(path, options = {}) {
     return response.json();
   }
   return response.text();
+}
+
+export async function apiCreatedResource(path, options = {}) {
+  const response = await performRequest(path, options);
+  return {
+    id: resourceIdFromLocation(response.headers.get("Location")),
+    attachmentId: response.headers.get("X-Attachment-Id") || null,
+  };
 }
 
 export function attachmentUrl(attachmentId) {

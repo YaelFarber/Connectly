@@ -4,12 +4,10 @@ import ConversationList from "../components/ConversationList";
 import ErrorMessage from "../components/ErrorMessage";
 import MessageComposer from "../components/MessageComposer";
 import MessageList from "../components/MessageList";
-import { useAuth } from "../context/AuthContext";
-import { apiRequest } from "../services/api";
+import { apiCreatedResource, apiRequest } from "../services/api";
 
 export default function ChatsPage() {
   const { conversationId } = useParams();
-  const { user } = useAuth();
 
   const [conversations, setConversations] = useState([]);
   const [conversationsLoading, setConversationsLoading] = useState(true);
@@ -41,15 +39,11 @@ export default function ChatsPage() {
     setError("");
 
     try {
-      const [details, messageResult] = await Promise.all([
-        apiRequest(`/conversations/${conversationId}`),
-        apiRequest(
-          `/conversations/${conversationId}/messages?limit=50`
-        ),
-      ]);
-
-      setConversation(details);
-      setMessages(messageResult.items);
+      const result = await apiRequest(
+        `/conversations/${conversationId}/messages?limit=50`
+      );
+      setConversation(result.conversation);
+      setMessages(result.items);
     } catch (requestError) {
       setError(requestError.message);
       setConversation(null);
@@ -82,7 +76,7 @@ export default function ChatsPage() {
         formData.append("attachment", file);
       }
 
-      const created = await apiRequest(
+      const created = await apiCreatedResource(
         `/conversations/${conversationId}/messages`,
         {
           method: "POST",
@@ -90,26 +84,26 @@ export default function ChatsPage() {
         }
       );
 
+      const createdAt = new Date().toISOString();
+      const messageType = file
+        ? file.type.startsWith("image/")
+          ? "image"
+          : "file"
+        : "text";
+
       const newMessage = {
         id: created.id,
-        senderId: user.id,
-        senderName: user.displayName,
+        mine: true,
         content: content || null,
-        messageType: file
-          ? file.type.startsWith("image/")
-            ? "image"
-            : "file"
-          : "text",
         isEdited: false,
         isDeleted: false,
-        createdAt: created.createdAt,
+        createdAt,
         attachment:
           file && created.attachmentId
             ? {
                 id: created.attachmentId,
                 name: file.name,
                 mimeType: file.type,
-                size: file.size,
               }
             : null,
       };
@@ -124,9 +118,9 @@ export default function ChatsPage() {
                   ...item,
                   lastMessageId: created.id,
                   lastMessagePreview: content || null,
-                  lastMessageType: newMessage.messageType,
+                  lastMessageType: messageType,
                   lastMessageDeleted: false,
-                  lastMessageAt: created.createdAt,
+                  lastMessageAt: createdAt,
                 }
               : item
           )
@@ -160,19 +154,13 @@ export default function ChatsPage() {
     try {
       await apiRequest(`/messages/${message.id}`, {
         method: "PATCH",
-        body: {
-          content: normalizedContent,
-        },
+        body: { content: normalizedContent },
       });
 
       setMessages((current) =>
         current.map((item) =>
           item.id === message.id
-            ? {
-                ...item,
-                content: normalizedContent,
-                isEdited: true,
-              }
+            ? { ...item, content: normalizedContent, isEdited: true }
             : item
         )
       );
@@ -180,10 +168,7 @@ export default function ChatsPage() {
       setConversations((current) =>
         current.map((item) =>
           item.lastMessageId === message.id
-            ? {
-                ...item,
-                lastMessagePreview: normalizedContent,
-              }
+            ? { ...item, lastMessagePreview: normalizedContent }
             : item
         )
       );
@@ -210,12 +195,7 @@ export default function ChatsPage() {
       setMessages((current) =>
         current.map((item) =>
           item.id === messageId
-            ? {
-                ...item,
-                content: null,
-                attachment: null,
-                isDeleted: true,
-              }
+            ? { ...item, content: null, attachment: null, isDeleted: true }
             : item
         )
       );
@@ -223,11 +203,7 @@ export default function ChatsPage() {
       setConversations((current) =>
         current.map((item) =>
           item.lastMessageId === messageId
-            ? {
-                ...item,
-                lastMessagePreview: null,
-                lastMessageDeleted: true,
-              }
+            ? { ...item, lastMessagePreview: null, lastMessageDeleted: true }
             : item
         )
       );
@@ -238,36 +214,20 @@ export default function ChatsPage() {
 
   return (
     <section className="chat-page">
-      <aside
-        className={`chat-sidebar ${
-          conversationId ? "mobile-hidden" : ""
-        }`}
-      >
+      <aside className={`chat-sidebar ${conversationId ? "mobile-hidden" : ""}`}>
         <div className="sidebar-heading">
           <h1>Chats</h1>
-
-          <Link className="small-button" to="/users">
-            New chat
-          </Link>
+          <Link className="small-button" to="/users">New chat</Link>
         </div>
-
-        <ConversationList
-          conversations={conversations}
-          loading={conversationsLoading}
-        />
+        <ConversationList conversations={conversations} loading={conversationsLoading} />
       </aside>
 
-      <div
-        className={`chat-panel ${
-          !conversationId ? "mobile-hidden" : ""
-        }`}
-      >
+      <div className={`chat-panel ${!conversationId ? "mobile-hidden" : ""}`}>
         <ErrorMessage message={error} />
 
         {!conversationId && (
           <div className="empty-chat">
-            Select a conversation or{" "}
-            <Link to="/users">start a new one</Link>.
+            Select a conversation or <Link to="/users">start a new one</Link>.
           </div>
         )}
 
@@ -275,36 +235,25 @@ export default function ChatsPage() {
           <div className="empty-chat">Loading chat...</div>
         )}
 
-        {conversationId &&
-          !chatLoading &&
-          conversation && (
-            <>
-              <header className="chat-header">
-                <Link className="mobile-back" to="/chats">
-                  ←
-                </Link>
+        {conversationId && !chatLoading && conversation && (
+          <>
+            <header className="chat-header">
+              <Link className="mobile-back" to="/chats">←</Link>
+              <div>
+                <h2>{conversation.name}</h2>
+                <span>{conversation.participantCount} participant(s)</span>
+              </div>
+            </header>
 
-                <div>
-                  <h2>{conversation.name}</h2>
-                  <span>
-                    {conversation.participants.length} participant(s)
-                  </span>
-                </div>
-              </header>
+            <MessageList
+              messages={messages}
+              onEdit={editMessage}
+              onDelete={deleteMessage}
+            />
 
-              <MessageList
-                messages={messages}
-                currentUserId={user.id}
-                onEdit={editMessage}
-                onDelete={deleteMessage}
-              />
-
-              <MessageComposer
-                onSend={sendMessage}
-                disabled={sending}
-              />
-            </>
-          )}
+            <MessageComposer onSend={sendMessage} disabled={sending} />
+          </>
+        )}
       </div>
     </section>
   );

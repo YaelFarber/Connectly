@@ -20,7 +20,7 @@ async function logout(req, res) {
 }
 
 async function me(req, res) {
-  res.status(200).json(await UserService.getMe(req.user.id));
+  res.status(200).json(UserService.getSessionView(req.user));
 }
 
 module.exports = { register, login, logout, me };

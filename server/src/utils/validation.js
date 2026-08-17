@@ -40,7 +40,7 @@ function username(value) {
   if (!USERNAME_PATTERN.test(normalized)) {
     throw new HttpError(
       400,
-      "Username may contain letters, numbers, dots, underscores and hyphens",
+      "Username can contain only English letters, numbers, dots, underscores and hyphens",
       "VALIDATION_ERROR"
     );
   }

@@ -22,7 +22,7 @@ app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
-    exposedHeaders: ["Location"],
+    exposedHeaders: ["Location", "X-Attachment-Id"],
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   })
 );
