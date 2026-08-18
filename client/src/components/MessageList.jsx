@@ -3,13 +3,22 @@ import { attachmentUrl } from "../services/api";
 
 export default function MessageList({
   messages,
+  currentUserId,
   onEdit,
   onDelete,
 }) {
   const [editingMessageId, setEditingMessageId] =
     useState(null);
+
   const [editContent, setEditContent] = useState("");
+
   const [savingMessageId, setSavingMessageId] =
+    useState(null);
+
+  const [confirmingDeleteId, setConfirmingDeleteId] =
+    useState(null);
+
+  const [deletingMessageId, setDeletingMessageId] =
     useState(null);
 
   if (!messages.length) {
@@ -21,6 +30,7 @@ export default function MessageList({
   }
 
   function startEditing(message) {
+    setConfirmingDeleteId(null);
     setEditingMessageId(message.id);
     setEditContent(message.content || "");
   }
@@ -66,14 +76,46 @@ export default function MessageList({
     }
   }
 
+  function startDeleteConfirmation(messageId) {
+    setEditingMessageId(null);
+    setEditContent("");
+    setConfirmingDeleteId(messageId);
+  }
+
+  function cancelDeleteConfirmation() {
+    setConfirmingDeleteId(null);
+  }
+
+  async function confirmDelete(messageId) {
+    setDeletingMessageId(messageId);
+
+    const deleted = await onDelete(messageId);
+
+    setDeletingMessageId(null);
+
+    if (deleted) {
+      setConfirmingDeleteId(null);
+    }
+  }
+
   return (
     <div className="message-list">
       {messages.map((message) => {
-        const mine = message.mine;
+        const mine =
+          message.mine ??
+          message.senderId === currentUserId;
+
         const editing =
           editingMessageId === message.id;
+
         const saving =
           savingMessageId === message.id;
+
+        const confirmingDelete =
+          confirmingDeleteId === message.id;
+
+        const deleting =
+          deletingMessageId === message.id;
 
         return (
           <article
@@ -82,7 +124,7 @@ export default function MessageList({
               mine ? "mine" : ""
             }`}
           >
-            {!mine && (
+            {!mine && message.senderName && (
               <strong className="message-sender">
                 {message.senderName}
               </strong>
@@ -100,7 +142,10 @@ export default function MessageList({
                     setEditContent(event.target.value)
                   }
                   onKeyDown={(event) =>
-                    handleEditKeyDown(event, message)
+                    handleEditKeyDown(
+                      event,
+                      message
+                    )
                   }
                   maxLength={4000}
                   disabled={saving}
@@ -129,12 +174,15 @@ export default function MessageList({
                       !editContent.trim()
                     }
                   >
-                    {saving ? "Saving..." : "Save"}
+                    {saving
+                      ? "Saving..."
+                      : "Save"}
                   </button>
                 </div>
 
                 <small className="edit-shortcut">
-                  Press Ctrl+Enter or Command+Enter to save
+                  Press Ctrl+Enter or
+                  Command+Enter to save
                 </small>
               </div>
             ) : (
@@ -152,7 +200,9 @@ export default function MessageList({
                         src={attachmentUrl(
                           message.attachment.id
                         )}
-                        alt={message.attachment.name}
+                        alt={
+                          message.attachment.name
+                        }
                         loading="lazy"
                       />
                     )}
@@ -171,6 +221,41 @@ export default function MessageList({
               </>
             )}
 
+            {confirmingDelete &&
+              !message.isDeleted && (
+                <div className="message-delete-confirmation">
+                  <span>
+                    Delete this message?
+                  </span>
+
+                  <div className="message-edit-actions">
+                    <button
+                      type="button"
+                      className="message-cancel-button"
+                      onClick={
+                        cancelDeleteConfirmation
+                      }
+                      disabled={deleting}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() =>
+                        confirmDelete(message.id)
+                      }
+                      disabled={deleting}
+                    >
+                      {deleting
+                        ? "Deleting..."
+                        : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
             <footer className="message-meta">
               <span>
                 {new Date(
@@ -185,7 +270,8 @@ export default function MessageList({
 
               {mine &&
                 !message.isDeleted &&
-                !editing && (
+                !editing &&
+                !confirmingDelete && (
                   <span className="message-actions">
                     {message.content && (
                       <button
@@ -201,7 +287,9 @@ export default function MessageList({
                     <button
                       type="button"
                       onClick={() =>
-                        onDelete(message.id)
+                        startDeleteConfirmation(
+                          message.id
+                        )
                       }
                     >
                       Delete
