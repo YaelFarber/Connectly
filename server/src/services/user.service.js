@@ -13,103 +13,268 @@ function getSessionView(authUser) {
 
 async function getOwnProfile(userId) {
   const user = await UserModel.findOwnProfileById(userId);
-  if (!user) throw new HttpError(404, "User not found", "NOT_FOUND");
+
+  if (!user) {
+    throw new HttpError(
+      404,
+      "User not found",
+      "NOT_FOUND"
+    );
+  }
+
   return user;
 }
 
 async function searchUsers(userId, query) {
-  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
-  if (search.length < 2) return { items: [] };
+  const search =
+    typeof query.search === "string"
+      ? query.search.trim().slice(0, 60)
+      : "";
 
-  const { limit, offset } = validation.pagination(query, {
-    defaultLimit: 20,
-    maxLimit: 30,
+  if (search.length < 2) {
+    return { items: [] };
+  }
+
+  const { limit, offset } = validation.pagination(
+    query,
+    {
+      defaultLimit: 20,
+      maxLimit: 30,
+    }
+  );
+
+  const rows = await UserModel.search({
+    currentUserId: userId,
+    search,
+    limit,
+    offset,
   });
-  const rows = await UserModel.search({ currentUserId: userId, search, limit, offset });
+
+  return { items: rows };
+}
+
+async function getContacts(userId, query) {
+  const { limit, offset } = validation.pagination(
+    query,
+    {
+      defaultLimit: 30,
+      maxLimit: 50,
+    }
+  );
+
+  const rows = await UserModel.listContacts({
+    currentUserId: userId,
+    limit,
+    offset,
+  });
+
   return { items: rows };
 }
 
 async function updateProfile(userId, input) {
   const current = await getOwnProfile(userId);
-  const email = input.email === undefined ? current.email : validation.email(input.email);
+
+  const email =
+    input.email === undefined
+      ? current.email
+      : validation.email(input.email);
+
   const displayName =
     input.displayName === undefined
       ? current.displayName
-      : validation.requiredString(input.displayName, "displayName", { min: 2, max: 60 });
+      : validation.requiredString(
+          input.displayName,
+          "displayName",
+          {
+            min: 2,
+            max: 60,
+          }
+        );
+
   const bio =
     input.bio === undefined
       ? current.bio
-      : validation.optionalString(input.bio, "bio", { max: 300 });
+      : validation.optionalString(
+          input.bio,
+          "bio",
+          {
+            max: 300,
+          }
+        );
 
-  await UserModel.updateProfile(userId, { email, displayName, bio });
+  await UserModel.updateProfile(userId, {
+    email,
+    displayName,
+    bio,
+  });
 }
 
 async function changePassword(userId, input) {
-  const currentPassword = validation.requiredString(input.currentPassword, "currentPassword", {
-    min: 1,
-    max: 128,
-  });
-  const newPassword = validation.password(input.newPassword, "newPassword");
-  const currentHash = await UserModel.getPasswordHash(userId);
+  const currentPassword =
+    validation.requiredString(
+      input.currentPassword,
+      "currentPassword",
+      {
+        min: 1,
+        max: 128,
+      }
+    );
 
-  if (!currentHash || !(await bcrypt.compare(currentPassword, currentHash))) {
-    throw new HttpError(401, "Current password is incorrect", "INVALID_CREDENTIALS");
-  }
-  if (await bcrypt.compare(newPassword, currentHash)) {
-    throw new HttpError(400, "New password must be different", "VALIDATION_ERROR");
+  const newPassword = validation.password(
+    input.newPassword,
+    "newPassword"
+  );
+
+  const currentHash =
+    await UserModel.getPasswordHash(userId);
+
+  if (
+    !currentHash ||
+    !(await bcrypt.compare(
+      currentPassword,
+      currentHash
+    ))
+  ) {
+    throw new HttpError(
+      401,
+      "Current password is incorrect",
+      "INVALID_CREDENTIALS"
+    );
   }
 
-  await UserModel.updatePassword(userId, await bcrypt.hash(newPassword, 12));
+  if (
+    await bcrypt.compare(
+      newPassword,
+      currentHash
+    )
+  ) {
+    throw new HttpError(
+      400,
+      "New password must be different",
+      "VALIDATION_ERROR"
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(
+    newPassword,
+    12
+  );
+
+  await UserModel.updatePassword(
+    userId,
+    passwordHash
+  );
 }
 
 async function blockUser(userId, targetId) {
   validation.uuid(targetId, "user id");
+
   if (userId === targetId) {
-    throw new HttpError(400, "You cannot block yourself", "VALIDATION_ERROR");
+    throw new HttpError(
+      400,
+      "You cannot block yourself",
+      "VALIDATION_ERROR"
+    );
   }
+
   if (!(await UserModel.findAuthById(targetId))) {
-    throw new HttpError(404, "User not found", "NOT_FOUND");
+    throw new HttpError(
+      404,
+      "User not found",
+      "NOT_FOUND"
+    );
   }
+
   await UserModel.block(userId, targetId);
 }
 
 async function unblockUser(userId, targetId) {
   validation.uuid(targetId, "user id");
-  await UserModel.unblock(userId, targetId);
+
+  await UserModel.unblock(
+    userId,
+    targetId
+  );
 }
 
 async function listForAdmin(query) {
-  const search = typeof query.search === "string" ? query.search.trim().slice(0, 60) : "";
-  if (search.length < 2) return { items: [] };
+  const search =
+    typeof query.search === "string"
+      ? query.search.trim().slice(0, 60)
+      : "";
 
-  const { limit, offset } = validation.pagination(query, {
-    defaultLimit: 25,
-    maxLimit: 50,
+  if (search.length < 2) {
+    return { items: [] };
+  }
+
+  const { limit, offset } =
+    validation.pagination(query, {
+      defaultLimit: 25,
+      maxLimit: 50,
+    });
+
+  const rows = await UserModel.adminList({
+    search,
+    limit,
+    offset,
   });
-  const rows = await UserModel.adminList({ search, limit, offset });
+
   return { items: rows };
 }
 
-async function setBlockedByAdmin(adminId, targetId, blocked) {
+async function setBlockedByAdmin(
+  adminId,
+  targetId,
+  blocked
+) {
   validation.uuid(targetId, "user id");
+
   if (typeof blocked !== "boolean") {
-    throw new HttpError(400, "blocked must be a boolean", "VALIDATION_ERROR");
+    throw new HttpError(
+      400,
+      "blocked must be a boolean",
+      "VALIDATION_ERROR"
+    );
   }
+
   if (adminId === targetId) {
-    throw new HttpError(400, "Administrators cannot block themselves", "VALIDATION_ERROR");
+    throw new HttpError(
+      400,
+      "Administrators cannot block themselves",
+      "VALIDATION_ERROR"
+    );
   }
-  const target = await UserModel.findAuthById(targetId);
-  if (!target) throw new HttpError(404, "User not found", "NOT_FOUND");
+
+  const target =
+    await UserModel.findAuthById(targetId);
+
+  if (!target) {
+    throw new HttpError(
+      404,
+      "User not found",
+      "NOT_FOUND"
+    );
+  }
+
   if (target.role === "admin") {
-    throw new HttpError(403, "Administrator accounts cannot be blocked here", "FORBIDDEN");
+    throw new HttpError(
+      403,
+      "Administrator accounts cannot be blocked here",
+      "FORBIDDEN"
+    );
   }
-  await UserModel.setBlocked(targetId, Boolean(blocked));
+
+  await UserModel.setBlocked(
+    targetId,
+    Boolean(blocked)
+  );
 }
 
 module.exports = {
   getSessionView,
   getOwnProfile,
   searchUsers,
+  getContacts,
   updateProfile,
   changePassword,
   blockUser,

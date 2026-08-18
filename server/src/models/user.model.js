@@ -73,7 +73,12 @@ async function create(connection, user, passwordHash) {
   );
 }
 
-async function search({ currentUserId, search, limit, offset }) {
+async function search({
+  currentUserId,
+  search,
+  limit,
+  offset,
+}) {
   const pattern = `%${search}%`;
 
   const [rows] = await pool.query(
@@ -94,13 +99,68 @@ async function search({ currentUserId, search, limit, offset }) {
        )
      ORDER BY u.display_name
      LIMIT ? OFFSET ?`,
-    [currentUserId, pattern, pattern, currentUserId, currentUserId, limit, offset]
+    [
+      currentUserId,
+      pattern,
+      pattern,
+      currentUserId,
+      currentUserId,
+      limit,
+      offset,
+    ]
   );
 
   return rows;
 }
 
-async function updateProfile(id, { email, displayName, bio }) {
+async function listContacts({
+  currentUserId,
+  limit,
+  offset,
+}) {
+  const [rows] = await pool.query(
+    `SELECT u.id,
+            u.display_name AS displayName
+     FROM conversation_participants mine
+     JOIN conversations c
+       ON c.id = mine.conversation_id
+      AND c.type = 'private'
+     JOIN conversation_participants other
+       ON other.conversation_id = c.id
+      AND other.user_id <> ?
+      AND other.left_at IS NULL
+     JOIN users u
+       ON u.id = other.user_id
+     WHERE mine.user_id = ?
+       AND mine.left_at IS NULL
+       AND u.is_blocked = FALSE
+       AND NOT EXISTS (
+         SELECT 1
+         FROM blocked_users b
+         WHERE (b.blocker_id = ? AND b.blocked_id = u.id)
+            OR (b.blocker_id = u.id AND b.blocked_id = ?)
+       )
+     GROUP BY u.id, u.display_name
+     ORDER BY MAX(c.updated_at) DESC,
+              u.display_name
+     LIMIT ? OFFSET ?`,
+    [
+      currentUserId,
+      currentUserId,
+      currentUserId,
+      currentUserId,
+      limit,
+      offset,
+    ]
+  );
+
+  return rows;
+}
+
+async function updateProfile(
+  id,
+  { email, displayName, bio }
+) {
   await pool.execute(
     `UPDATE users
      SET email = ?,
@@ -165,7 +225,11 @@ async function isBlockedBetween(firstId, secondId) {
   return rows.length > 0;
 }
 
-async function adminList({ search, limit, offset }) {
+async function adminList({
+  search,
+  limit,
+  offset,
+}) {
   const pattern = `%${search}%`;
 
   const [rows] = await pool.query(
@@ -219,6 +283,7 @@ module.exports = {
   existsByUsernameOrEmail,
   create,
   search,
+  listContacts,
   updateProfile,
   getPasswordHash,
   updatePassword,
